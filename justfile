@@ -1,6 +1,6 @@
 [arg("repo", long="repo", help="Repository path; defaults to the caller's checkout")]
 [arg("action", pattern="status", help="Operation to perform")]
-[doc("Inspect Git submodule state in the selected repository")]
+[doc("Inspect local changes and fetch upstream ahead/behind counts")]
 [no-cd]
 submodule action repo=invocation_directory():
     @sh {{ quote(source_directory() / "sh/git-submodule-status-check.sh") }} {{ quote(repo) }}

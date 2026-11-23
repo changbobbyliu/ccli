@@ -2,27 +2,36 @@
 set -eu
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-test_dir="$script_dir/tests"
+found=0
 
-if [ ! -d "$test_dir" ] ||
-    ! find "$test_dir" -type f -name '*.test.sh' -print | grep -q .; then
+run_tests() {
+    for entry in "$1"/* "$1"/.[!.]* "$1"/..?*; do
+        [ -e "$entry" ] || continue
+        [ ! -L "$entry" ] || continue
+
+        if [ -d "$entry" ]; then
+            run_tests "$entry"
+        elif [ -f "$entry" ]; then
+            case "$entry" in
+                *.test.sh)
+                    found=1
+                    printf '\nRunning: %s\n' "$entry"
+
+                    if sh "$entry"; then
+                        printf '✅ PASS: %s\n' "$entry"
+                    else
+                        printf '❌ FAIL: %s\n' "$entry" >&2
+                        exit 1
+                    fi
+                    ;;
+            esac
+        fi
+    done
+}
+
+run_tests "$script_dir/tests"
+
+if [ "$found" -eq 0 ]; then
     printf '❌ No shell tests found\n' >&2
     exit 1
 fi
-
-find "$test_dir" -type f -name '*.test.sh' -exec sh -c '
-    failed=0
-
-    for test_file do
-        printf "\nRunning: %s\n" "$test_file"
-
-        if sh "$test_file"; then
-            printf "✅ PASS: %s\n" "$test_file"
-        else
-            printf "❌ FAIL: %s\n" "$test_file" >&2
-            failed=1
-        fi
-    done
-
-    exit "$failed"
-' sh {} +

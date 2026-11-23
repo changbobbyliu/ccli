@@ -1,26 +1,28 @@
 #!/bin/sh
 set -eu
 
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(git -C "${1:-.}" rev-parse --show-toplevel)
 cd "$root"
 
-printf 'Repository: %s\n' "$root"
+CCLI_REPO_REPORTER="$script_dir/git-repo-status.sh"
+export CCLI_REPO_REPORTER
 
-printf '\nWorking tree (empty means clean):\n'
-git status --short --untracked-files=all --ignore-submodules=none
+sh "$CCLI_REPO_REPORTER" workspace
 
-printf '\nRecursive submodule pins:\n'
-git submodule status --recursive
+git submodule foreach --quiet --recursive '
+    sh "$CCLI_REPO_REPORTER" "$displaypath"
+    
+    git -C "$toplevel" --no-pager diff \
+        --submodule=log --ignore-submodules=dirty \
+        -- ":(literal)$sm_path"
 
-printf '\nUnstaged submodule changes:\n'
-git --no-pager diff --submodule=log
-
-printf '\nStaged submodule changes:\n'
-git --no-pager diff --cached --submodule=log
-
-printf '\nInitialized submodule working trees:\n'
-git submodule foreach --recursive '
-    git status --short --untracked-files=all --ignore-submodules=none
+    git -C "$toplevel" --no-pager diff --cached \
+        --submodule=log --ignore-submodules=dirty \
+        -- ":(literal)$sm_path"
 '
 
-printf '\nRemote comparison and URL-sync detection: not implemented yet.\n'
+printf '\nSubmodule pin issues (empty means none):\n'
+git submodule status --recursive | sed -n '/^[-+U]/p'
+
+printf '\n○ URL-sync detection: not implemented yet.\n'
