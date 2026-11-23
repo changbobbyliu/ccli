@@ -14,10 +14,21 @@ if [ -z "$declared" ]; then
     exit 0
 fi
 
+expected_parent=$declared
+expected_child=$declared
+
 case "$declared" in
     ./*|../*)
-        printf '  ○ Relative URL comparison: not implemented yet\n'
-        exit 0
+        script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+        if ! resolved=$(sh "$script_dir/git-submodule-url-resolve.sh" \
+            "$parent" "$path" "$declared"); then
+            printf '  ❌ URL comparison unavailable: resolution failed\n'
+            exit 0
+        fi
+
+        expected_parent=$(printf '%s\n' "$resolved" | sed -n '1p')
+        expected_child=$(printf '%s\n' "$resolved" | sed -n '2p')
         ;;
 esac
 
@@ -30,15 +41,23 @@ if [ -z "$registered" ]; then
 fi
 
 branch=$(git -C "$child" symbolic-ref --quiet --short HEAD || :)
-remote=origin
+remote=
 if [ -n "$branch" ]; then
     remote=$(git -C "$child" config \
-        --get "branch.$branch.remote" || printf 'origin')
+        --get "branch.$branch.remote" || :)
+fi
+
+if [ -z "$remote" ]; then
+    remote=origin
+    if [ "$(git -C "$child" remote | wc -l)" -eq 1 ]; then
+        remote=$(git -C "$child" remote)
+    fi
 fi
 
 actual=$(git -C "$child" config --get "remote.$remote.url" || :)
 
-if [ "$declared" = "$registered" ] && [ "$declared" = "$actual" ]; then
+if [ "$expected_parent" = "$registered" ] &&
+    [ "$expected_child" = "$actual" ]; then
     printf '  ✅ URL configuration matches .gitmodules\n'
 else
     printf '  ⚠ URL sync needed: %s\n' "$path"

@@ -56,6 +56,43 @@ git -C "$parent" config --file .gitmodules \
     submodule.library.url "$fixture/replacement"
 expect '⚠ URL sync needed'
 
-git -C "$parent" config --file .gitmodules \
-    submodule.library.url ../source
-expect '○ Relative URL comparison: not implemented yet'
+branch=$(git -C "$parent" symbolic-ref --short HEAD)
+git -C "$parent" config "branch.$branch.remote" upstream
+git -C "$parent" config remote.origin.url \
+    https://example.invalid/unused/workspace.git
+
+for base in \
+    https://example.invalid/team/workspace.git \
+    git@example.invalid:team/workspace.git \
+    "$fixture/remotes/workspace.git" \
+    ../remotes/workspace.git
+do
+    git -C "$parent" config remote.upstream.url "$base"
+
+    for relative in ../library.git ./nested.git ../../shared/library.git; do
+        git -C "$parent" config --file .gitmodules \
+            submodule.library.url "$relative"
+
+        # Git's actual behavior is the oracle, only in this fixture.
+        git -C "$parent" submodule sync -- "deps/with spaces" >/dev/null
+        expect '✅ URL configuration matches .gitmodules'
+
+        git -C "$child" remote set-url origin "$fixture/stale"
+        expect '⚠ URL sync needed'
+    done
+done
+
+# Detached parent: Git falls back to origin.
+git -C "$parent" checkout -q --detach
+git -C "$parent" submodule sync -- "deps/with spaces" >/dev/null
+expect '✅ URL configuration matches .gitmodules'
+
+# No origin: Git uses the sole remaining remote, upstream.
+git -C "$parent" config --remove-section remote.origin
+git -C "$parent" submodule sync -- "deps/with spaces" >/dev/null
+expect '✅ URL configuration matches .gitmodules'
+
+# No remotes: Git falls back to the parent's working directory.
+git -C "$parent" config --remove-section remote.upstream
+git -C "$parent" submodule sync -- "deps/with spaces" >/dev/null
+expect '✅ URL configuration matches .gitmodules'

@@ -17,7 +17,7 @@ run_tests() {
                     found=1
                     printf '\nRunning: %s\n' "$entry"
 
-                    if sh "$entry"; then
+                    if sh -n "$entry" && sh "$entry"; then
                         printf '✅ PASS: %s\n' "$entry"
                     else
                         printf '❌ FAIL: %s\n' "$entry" >&2
